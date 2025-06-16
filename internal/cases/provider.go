@@ -5,6 +5,7 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=provider.go -destination=./testdata/storage.go -package=testdata
 type CryptoProvider interface {
-	GetActualRates(ctx context.Context, titles []string) ([]entities.Coin, error) //обновление списка монет у провайдера
+	GetActualRates(ctx context.Context, titles []string) ([]entities.Coin, error)
 }

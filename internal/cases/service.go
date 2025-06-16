@@ -28,26 +28,8 @@ func NewService(storage Storage, provider CryptoProvider) (*Service, error) {
 }
 
 func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([]entities.Coin, error) {
-	if len(requestedTitles) == 0 {
-		return nil, errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty")
-	}
-
-	existingTitles, err := s.storage.GetCoinsList(ctx)
-	if err != nil {
-		return nil, errors.Wrap(entities.ErrInternal, "failed to get existing coins list")
-	}
-
-	missingTitles := s.findMissingTitles(requestedTitles, existingTitles)
-
-	if len(missingTitles) > 0 {
-		newCoins, err := s.provider.GetActualRates(ctx, missingTitles)
-		if err != nil {
-			return nil, errors.Wrap(entities.ErrInternal, "failed to get missing rates")
-		}
-
-		if err := s.storage.Store(ctx, newCoins); err != nil {
-			return nil, errors.Wrap(entities.ErrInternal, "failed to store new rates")
-		}
+	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
+		return nil, errors.Wrap(err, "failed to preprocess requested titles")
 	}
 
 	coinsForUser, err := s.storage.GetActualCoins(ctx, requestedTitles)
@@ -58,19 +40,23 @@ func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([
 	return coinsForUser, nil
 }
 func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []string, aggType string) ([]entities.Coin, error) {
-	if err := s.preprocessing(ctx, requestedTitles); err != nil {
-		return nil, errors.Wrap(err, "")
+	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
+		return nil, errors.Wrap(err, "failed to preprocess requested titles")
+	}
+
+	if aggType == "" {
+		return nil, errors.Wrap(entities.ErrInvalidParam, "aggregation type cannot be empty")
 	}
 
 	coinsForUser, err := s.storage.GetAggregateCoins(ctx, requestedTitles, aggType)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get coin rates")
+		return nil, errors.Wrap(entities.ErrInternal, "failed to get aggregate coin rates")
 	}
 
 	return coinsForUser, nil
 }
 
-func (s *Service) preprocessing(ctx context.Context, requestedTitles []string) error {
+func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
 	if len(requestedTitles) == 0 {
 		return errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty")
 	}
@@ -100,7 +86,6 @@ func (s *Service) findMissingTitles(requested, existing []string) []string {
 	for _, title := range existing {
 		existingSet[title] = struct{}{}
 	}
-
 	missing := make([]string, 0)
 	for _, title := range requested {
 		if _, ok := existingSet[title]; !ok {
