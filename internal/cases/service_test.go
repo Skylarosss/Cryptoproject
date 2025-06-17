@@ -9,57 +9,44 @@ import (
 	"Cryptoproject/mocks"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
-func TestService_GetLastRates_Success(t *testing.T) {
-	// 1. Инициализация
+func Test_GetLastRates_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// 2. Создаем моки зависимостей
 	mockStorage := mocks.NewMockStorage(ctrl)
 	mockProvider := mocks.NewMockCryptoProvider(ctrl)
 
-	// 3. Настраиваем ожидания для моков
 	requestedTitles := []string{"BTC", "ETH"}
-	existingTitles := []string{"BTC"} // ETH отсутствует в хранилище
+	existingTitles := []string{"BTC"}
 
-	// Ожидаем вызов GetCoinsList
 	mockStorage.EXPECT().
 		GetCoinsList(gomock.Any()).
-		Return(existingTitles, nil).
-		Times(1)
+		Return(existingTitles, nil)
 
-	// Ожидаем запрос недостающих курсов (ETH)
 	mockProvider.EXPECT().
 		GetActualRates(gomock.Any(), []string{"ETH"}).
-		Return([]entities.Coin{{Title: "ETH", Cost: 3000}}, nil).
-		Times(1)
+		Return([]entities.Coin{{Title: "ETH", Cost: 3000}}, nil)
 
-	// Ожидаем сохранение новых курсов
 	mockStorage.EXPECT().
 		Store(gomock.Any(), []entities.Coin{{Title: "ETH", Cost: 3000}}).
-		Return(nil).
-		Times(1)
+		Return(nil)
 
-	// Ожидаем запрос актуальных курсов
 	mockStorage.EXPECT().
 		GetActualCoins(gomock.Any(), requestedTitles).
 		Return([]entities.Coin{
 			{Title: "BTC", Cost: 50000},
 			{Title: "ETH", Cost: 3000},
-		}, nil).
-		Times(1)
+		}, nil)
 
-	// 4. Создаем тестируемый сервис
 	service, err := cases.NewService(mockStorage, mockProvider)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	// 5. Вызываем метод
 	rates, err := service.GetLastRates(context.Background(), requestedTitles)
 
-	// 6. Проверяем результаты
 	assert.NoError(t, err)
 	assert.Len(t, rates, 2)
 	assert.Equal(t, 50000.0, rates[0].Cost)
