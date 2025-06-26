@@ -1,0 +1,5 @@
+{
+  "go.toolsEnvVars": {
+        "PATH": "/usr/local/bin:/Users/iGamez/go/bin:/opt/homebrew/bin:/usr/local/go/bin:${env:PATH}"
+    }
+}
