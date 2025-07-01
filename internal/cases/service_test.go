@@ -14,6 +14,8 @@ import (
 )
 
 func setupService(t *testing.T) (*cases.Service, *mocks.MockStorage, *mocks.MockCryptoProvider) {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	t.Cleanup(func() { ctrl.Finish() })
 
@@ -27,6 +29,7 @@ func setupService(t *testing.T) (*cases.Service, *mocks.MockStorage, *mocks.Mock
 }
 
 func TestService_GetLastRates_Success(t *testing.T) {
+	t.Parallel()
 
 	service, mockStorage, mockProvider := setupService(t)
 
@@ -61,6 +64,8 @@ func TestService_GetLastRates_Success(t *testing.T) {
 }
 
 func TestService_GetLastRates_GetCoinListError(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, _ := setupService(t)
 
 	requestedTitles := []string{"BTC"}
@@ -77,6 +82,8 @@ func TestService_GetLastRates_GetCoinListError(t *testing.T) {
 }
 
 func TestService_GetLastRates_GetActualRatesError(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, mockProvider := setupService(t)
 
 	requestedTitles := []string{"BTC", "ETH"}
@@ -97,6 +104,8 @@ func TestService_GetLastRates_GetActualRatesError(t *testing.T) {
 }
 
 func TestService_GetLastRates_StoreError(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, mockProvider := setupService(t)
 
 	existingTitles := []string{"BTC"}
@@ -121,6 +130,8 @@ func TestService_GetLastRates_StoreError(t *testing.T) {
 
 }
 func TestService_GetLastRates_GetActualCoinsError(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, mockProvider := setupService(t)
 
 	requestedTitles := []string{"BTC", "ETH"}
@@ -151,6 +162,8 @@ func TestService_GetLastRates_GetActualCoinsError(t *testing.T) {
 }
 
 func TestService_GetAggregateRates_Success(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, mockProvider := setupService(t)
 
 	requestedTitles := []string{"BTC", "ETH"}
@@ -185,6 +198,8 @@ func TestService_GetAggregateRates_Success(t *testing.T) {
 }
 
 func TestNewService_StorageNilError(t *testing.T) {
+	t.Parallel()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -198,6 +213,8 @@ func TestNewService_StorageNilError(t *testing.T) {
 }
 
 func TestNewService_ProviderNilError(t *testing.T) {
+	t.Parallel()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -211,6 +228,8 @@ func TestNewService_ProviderNilError(t *testing.T) {
 }
 
 func TestService_GetLastRates_EmptyTitles(t *testing.T) {
+	t.Parallel()
+
 	service, _, _ := setupService(t)
 
 	rates, err := service.GetLastRates(context.Background(), []string{})
@@ -232,6 +251,8 @@ func TestService_GetAggregateRates_EmptyTitles(t *testing.T) {
 }
 
 func TestService_GetAggregateRates_EmptyAggType(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, _ := setupService(t)
 
 	mockStorage.EXPECT().
@@ -245,6 +266,8 @@ func TestService_GetAggregateRates_EmptyAggType(t *testing.T) {
 	require.ErrorIs(t, err, entities.ErrInvalidParam)
 }
 func TestService_GetAggregateRates_GetAggregateCoinsError(t *testing.T) {
+	t.Parallel()
+
 	service, mockStorage, _ := setupService(t)
 
 	requestedTitles := []string{"BTC"}
