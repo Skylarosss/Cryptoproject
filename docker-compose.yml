@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:latest
+    container_name: newdb
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: coinsdatabase
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - "./internal/adapters/storage/migrations/:/docker-entrypoint-initdb.d/"
+    ports:
+      - "5432:5432"
+volumes:
+  pg-data:

@@ -1,0 +1,9 @@
+BEGIN;
+
+CREATE TABLE coins (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(50) NOT NULL,
+    cost DECIMAL(10, 8) NOT NULL
+);
+
+COMMIT;
