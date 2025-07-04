@@ -23,8 +23,6 @@ const (
 	tsymsQuery      = "tsyms"                                   // Параметр запроса для обозначения целевой валюты
 )
 
-//1) миграции 2) docker-compose 3)накат миграций 4)NewStorage  pgx
-
 type Client struct {
 	httpClient *http.Client
 	costIn     string

@@ -8,6 +8,7 @@ import (
 	"Cryptoproject/internal/entities"
 )
 
+// конспект на тему "Врап ошибок"
 type Service struct {
 	storage  Storage
 	provider CryptoProvider
@@ -63,7 +64,7 @@ func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []
 
 	existingTitles, err := s.storage.GetCoinsList(ctx)
 	if err != nil {
-		return errors.Wrap(entities.ErrInternal, "failed to get existing coins list")
+		return errors.Wrap(entities.ErrInvalidParam, "failed to get existing coins list")
 	}
 
 	missingTitles := s.findMissingTitles(requestedTitles, existingTitles)
