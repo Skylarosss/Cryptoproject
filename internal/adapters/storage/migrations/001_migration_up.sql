@@ -2,8 +2,8 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS coins (
     id SERIAL PRIMARY KEY,
-    title VARCHAR(50) NOT NULL,
-    cost DECIMAL(10, 8) NOT NULL,
+    title VARCHAR(50) NOT NULL UNIQUE,
+    cost DECIMAL(10, 2) NOT NULL,
     actual_at TIMESTAMP DEFAULT NOW()
 );
 

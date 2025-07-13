@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -40,24 +42,33 @@ func (s *Storage) Close() {
 		})
 }
 
-func (s *Storage) Store(ctx context.Context, coins []*entities.Coin) error {
+func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
 	tx, err := s.dbPool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return errors.Wrapf(entities.ErrInternal, "failed to begin transaction: %v", err)
 	}
-	defer tx.Rollback(ctx)
-
-	sqlQuery := `
-    INSERT INTO coins (title, cost)
-    VALUES ($1, $2)
-    ON CONFLICT (title) DO UPDATE SET cost = EXCLUDED.cost
-    `
-	//без цикла
-	for _, coin := range coins {
-		_, err = tx.Exec(ctx, sqlQuery, coin.Title, coin.Cost)
-		if err != nil {
-			return errors.Wrapf(entities.ErrInternal, "failed to insert/update coin with title=%q", coin.Title)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			fmt.Printf("failed to rollback transaction: %v\n", err)
 		}
+	}()
+
+	placeholders := make([]string, 0, len(coins))
+	args := make([]interface{}, 0, len(coins)*2)
+	for idx, coin := range coins {
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d)", idx*2+1, idx*2+2))
+		args = append(args, coin.Title, coin.Cost)
+	}
+
+	sqlQuery := fmt.Sprintf(`
+        INSERT INTO coins (title, cost)
+        VALUES %s
+        ON CONFLICT (title) DO UPDATE SET cost = EXCLUDED.cost
+    `, strings.Join(placeholders, ", "))
+
+	_, err = tx.Exec(ctx, sqlQuery, args...)
+	if err != nil {
+		return errors.Wrapf(entities.ErrInternal, "failed to insert/update multiple coins: %v", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -120,42 +131,28 @@ func (s *Storage) GetActualCoins(ctx context.Context, titles []string) ([]entiti
 	return result, nil
 }
 
-// убрать дубликат
 func (s *Storage) GetAggregateCoins(ctx context.Context, titles []string, aggType string) ([]entities.Coin, error) {
+	var aggFunc string
+
 	switch aggType {
 	case "AVG":
-		query := `
-        SELECT title, AVG(cost) AS avg_cost
-        FROM coins
-        WHERE title = ANY($1::TEXT[])
-        GROUP BY title
-        ORDER BY title ASC
-        `
-		return s.queryAggregatedCoins(ctx, query, titles)
+		aggFunc = "AVG(cost)"
 	case "MIN":
-		query := `
-        SELECT title, MIN(cost) AS min_cost
-        FROM coins
-        WHERE title = ANY($1::TEXT[])
-        GROUP BY title
-        ORDER BY title ASC
-        `
-		return s.queryAggregatedCoins(ctx, query, titles)
+		aggFunc = "MIN(cost)"
 	case "MAX":
-		query := `
-        SELECT title, MAX(cost) AS max_cost
-        FROM coins
-        WHERE title = ANY($1::TEXT[])
-        GROUP BY title
-        ORDER BY title ASC
-        `
-		return s.queryAggregatedCoins(ctx, query, titles)
+		aggFunc = "MAX(cost)"
 	default:
 		return nil, errors.Wrap(entities.ErrInvalidParam, "unsupported aggregation type")
 	}
-}
 
-func (s *Storage) queryAggregatedCoins(ctx context.Context, query string, titles []string) ([]entities.Coin, error) {
+	query := fmt.Sprintf(`
+        SELECT title, %s AS cost
+        FROM coins
+        WHERE title = ANY($1::TEXT[])
+        GROUP BY title
+        ORDER BY title ASC
+    `, aggFunc)
+
 	rows, err := s.dbPool.Query(ctx, query, titles)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to execute aggregated query")
