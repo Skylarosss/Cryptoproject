@@ -29,7 +29,7 @@ func main() {
 
 	ctx := context.Background()
 
-	requestedTitles := []string{"MNT"}
+	requestedTitles := []string{"BTC", "ETH"}
 
 	coins, err := service.GetLastRates(ctx, requestedTitles)
 	if err != nil {

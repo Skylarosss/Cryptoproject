@@ -57,41 +57,28 @@ func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []strin
 }
 
 func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
-
 	if len(requestedTitles) == 0 {
 		return errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty")
 	}
 
-	existingTitles, err := s.storage.GetCoinsList(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get existing coins list")
+	uniqueRequestedTitles := make(map[string]bool)
+	for _, title := range requestedTitles {
+		uniqueRequestedTitles[title] = true
 	}
 
-	missingTitles := s.findMissingTitles(requestedTitles, existingTitles)
+	var allNewCoins []entities.Coin
 
-	if len(missingTitles) > 0 {
-		newCoins, err := s.provider.GetActualRates(ctx, missingTitles)
-		if err != nil {
-			return errors.Wrap(entities.ErrInvalidParam, "сoin does not exist or was not found in the provider")
+	for title := range uniqueRequestedTitles {
+		actualRate, err := s.provider.GetActualRates(ctx, []string{title})
+		if err != nil || len(actualRate) == 0 {
+			return errors.Wrapf(err, "coin %s does not exist or was not found in the provider", title)
 		}
-
-		if err := s.storage.Store(ctx, newCoins); err != nil {
-			return errors.Wrap(entities.ErrInternal, "failed to store new rates")
-		}
+		allNewCoins = append(allNewCoins, actualRate...)
 	}
+
+	if err := s.storage.Store(ctx, allNewCoins); err != nil {
+		return errors.Wrap(entities.ErrInternal, "failed to store new rates")
+	}
+
 	return nil
-}
-
-func (s *Service) findMissingTitles(requested, existing []string) []string {
-	existingSet := make(map[string]struct{}, len(existing))
-	for _, title := range existing {
-		existingSet[title] = struct{}{}
-	}
-	missing := make([]string, 0)
-	for _, title := range requested {
-		if _, ok := existingSet[title]; !ok {
-			missing = append(missing, title)
-		}
-	}
-	return missing
 }

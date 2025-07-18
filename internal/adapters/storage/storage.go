@@ -59,8 +59,7 @@ func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
 		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d)", idx*2+1, idx*2+2))
 		args = append(args, coin.Title, coin.Cost)
 	}
-	// Иньекция
-	// накапливаем данные
+
 	sqlQuery := fmt.Sprintf(`
         INSERT INTO coins (title, cost) 
         VALUES %s 
@@ -104,9 +103,14 @@ func (s *Storage) GetCoinsList(ctx context.Context) ([]string, error) {
 func (s *Storage) GetActualCoins(ctx context.Context, titles []string) ([]entities.Coin, error) {
 	query := `
     SELECT title, cost
-    FROM coins
-    WHERE title = ANY($1::TEXT[])
-    ORDER BY title ASC
+        FROM coins
+        WHERE title = ANY($1::TEXT[]) AND actual_at IN (
+            SELECT MAX(actual_at) 
+            FROM coins 
+            WHERE title = ANY($1::TEXT[])
+            GROUP BY title
+        )
+        ORDER BY title ASC
     `
 
 	rows, err := s.dbPool.Query(ctx, query, titles)
