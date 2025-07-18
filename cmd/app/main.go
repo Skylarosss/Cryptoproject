@@ -29,13 +29,8 @@ func main() {
 
 	ctx := context.Background()
 
-	requestedTitles := []string{"TRX", "BTC", "ETH", "LTC", "XRP"}
+	requestedTitles := []string{"MNT"}
 
-	if err := service.UpdateCoinData(ctx); err != nil {
-		log.Fatalf("Ошибка при обновлении данных: %v", err)
-	}
-
-	log.Println("Данные успешно обновлены.")
 	coins, err := service.GetLastRates(ctx, requestedTitles)
 	if err != nil {
 		log.Fatalf("Failed to get actual rates: %v", err)

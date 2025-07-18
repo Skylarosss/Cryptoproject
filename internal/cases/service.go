@@ -56,32 +56,15 @@ func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []strin
 	return coinsForUser, nil
 }
 
-func (s *Service) UpdateCoinData(ctx context.Context) error {
-	updateCoinsList, err := s.storage.GetCoinsList(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get actual coins list")
-	}
-	if len(updateCoinsList) == 0 {
-		return nil
-	}
-	listCoin, err := s.provider.GetActualRates(ctx, updateCoinsList)
-	if err != nil {
-		return errors.Wrap(err, "failed to get actual rates from provider")
-	}
-	if err = s.storage.Store(ctx, listCoin); err != nil {
-		return errors.Wrap(err, "failed to store actual rates")
-	}
-	return nil
-}
-
 func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
+
 	if len(requestedTitles) == 0 {
 		return errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty")
 	}
 
 	existingTitles, err := s.storage.GetCoinsList(ctx)
 	if err != nil {
-		return errors.Wrap(entities.ErrInternal, "failed to get existing coins list")
+		return errors.Wrap(err, "failed to get existing coins list")
 	}
 
 	missingTitles := s.findMissingTitles(requestedTitles, existingTitles)

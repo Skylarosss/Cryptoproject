@@ -59,11 +59,11 @@ func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
 		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d)", idx*2+1, idx*2+2))
 		args = append(args, coin.Title, coin.Cost)
 	}
-
+	// Иньекция
+	// накапливаем данные
 	sqlQuery := fmt.Sprintf(`
-        INSERT INTO coins (title, cost)
-        VALUES %s
-        ON CONFLICT (title) DO UPDATE SET cost = EXCLUDED.cost
+        INSERT INTO coins (title, cost) 
+        VALUES %s 
     `, strings.Join(placeholders, ", "))
 
 	_, err = tx.Exec(ctx, sqlQuery, args...)
