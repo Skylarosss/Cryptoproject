@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -53,21 +52,14 @@ func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
 		}
 	}()
 
-	placeholders := make([]string, 0, len(coins))
-	args := make([]interface{}, 0, len(coins)*2)
-	for idx, coin := range coins {
-		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d)", idx*2+1, idx*2+2))
-		args = append(args, coin.Title, coin.Cost)
+	data := make([][]interface{}, len(coins))
+	for i, coin := range coins {
+		data[i] = []interface{}{coin.Title, coin.Cost}
 	}
 
-	sqlQuery := fmt.Sprintf(`
-        INSERT INTO coins (title, cost) 
-        VALUES %s 
-    `, strings.Join(placeholders, ", "))
-
-	_, err = tx.Exec(ctx, sqlQuery, args...)
+	_, err = tx.CopyFrom(ctx, pgx.Identifier{"coins"}, []string{"title", "cost"}, pgx.CopyFromRows(data))
 	if err != nil {
-		return errors.Wrapf(entities.ErrInternal, "failed to insert/update multiple coins: %v", err)
+		return errors.Wrapf(entities.ErrInternal, "failed to perform bulk insert using COPY: %v", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
