@@ -1,0 +1,96 @@
+basePath: /
+definitions:
+  dto.CoinDTO:
+    properties:
+      cost:
+        type: number
+      title:
+        type: string
+    type: object
+  dto.ErrorResponseDTO:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  dto.RequestDTO:
+    properties:
+      aggType:
+        type: string
+      titles:
+        items:
+          type: string
+        type: array
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: This API provides cryptocurrency rate information.
+  title: Cryptocurrency Rates API
+  version: "1.0"
+paths:
+  /rates/aggregate:
+    post:
+      consumes:
+      - application/json
+      description: Aggregates rates for specified cryptocurrencies based on given
+        parameters.
+      parameters:
+      - description: Request containing coin titles and aggregation type
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CoinDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: Get aggregate rates
+      tags:
+      - Coins
+  /rates/last:
+    post:
+      consumes:
+      - application/json
+      description: Retrieves the latest rates for specified cryptocurrencies.
+      parameters:
+      - description: Request containing coin titles
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CoinDTO'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponseDTO'
+      summary: Get last rates
+      tags:
+      - Coins
+schemes:
+- http
+swagger: "2.0"

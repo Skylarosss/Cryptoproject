@@ -42,28 +42,14 @@ func (s *Storage) Close() {
 }
 
 func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
-	tx, err := s.dbPool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return errors.Wrapf(entities.ErrInternal, "failed to begin transaction: %v", err)
-	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-			fmt.Printf("failed to rollback transaction: %v\n", err)
-		}
-	}()
-
 	data := make([][]interface{}, len(coins))
 	for i, coin := range coins {
 		data[i] = []interface{}{coin.Title, coin.Cost}
 	}
 
-	_, err = tx.CopyFrom(ctx, pgx.Identifier{"coins"}, []string{"title", "cost"}, pgx.CopyFromRows(data))
+	_, err := s.dbPool.CopyFrom(ctx, pgx.Identifier{"coins"}, []string{"title", "cost"}, pgx.CopyFromRows(data))
 	if err != nil {
 		return errors.Wrapf(entities.ErrInternal, "failed to perform bulk insert using COPY: %v", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return errors.Wrap(entities.ErrInternal, "failed to commit transaction")
 	}
 
 	return nil

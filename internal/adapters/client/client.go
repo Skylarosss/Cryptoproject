@@ -83,17 +83,18 @@ func (c *Client) GetActualRates(ctx context.Context, titles []string) ([]entitie
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			errors.Errorf("failed to close response body: %v\n", err)
+			errors.Wrapf(entities.ErrInternal, "failed to close response body: %v", err)
 		}
 	}()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, errors.Errorf("API returned status code %d", resp.StatusCode)
-	}
-
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read response body")
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		message := string(bodyBytes)
+		return nil, errors.Errorf("API returned an error (%d): %s", resp.StatusCode, message)
 	}
 
 	var result map[string]map[string]interface{}

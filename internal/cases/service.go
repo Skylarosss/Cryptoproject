@@ -2,6 +2,7 @@ package cases
 
 import (
 	"context"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -27,7 +28,7 @@ func NewService(storage Storage, provider CryptoProvider) (*Service, error) {
 	}, nil
 }
 
-func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([]entities.Coin, error) {
+func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([]*entities.Coin, error) {
 	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
 		return nil, errors.Wrap(err, "failed to preprocess requested titles")
 	}
@@ -37,9 +38,15 @@ func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([
 		return nil, errors.Wrap(entities.ErrInternal, "failed to get coin rates")
 	}
 
-	return coinsForUser, nil
+	result := make([]*entities.Coin, len(coinsForUser))
+	for i, coin := range coinsForUser {
+		result[i] = &coin
+	}
+
+	return result, nil
 }
-func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []string, aggType string) ([]entities.Coin, error) {
+
+func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []string, aggType string) ([]*entities.Coin, error) {
 	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
 		return nil, errors.Wrap(err, "failed to preprocess aggregate requested titles")
 	}
@@ -53,7 +60,12 @@ func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []strin
 		return nil, errors.Wrap(entities.ErrInternal, "failed to get aggregate coin rates")
 	}
 
-	return coinsForUser, nil
+	result := make([]*entities.Coin, len(coinsForUser))
+	for i, coin := range coinsForUser {
+		result[i] = &coin
+	}
+
+	return result, nil
 }
 
 func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
@@ -66,14 +78,28 @@ func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []
 		uniqueRequestedTitles[title] = true
 	}
 
-	var allNewCoins []entities.Coin
-
+	allUniqueTitles := make([]string, 0, len(uniqueRequestedTitles))
 	for title := range uniqueRequestedTitles {
-		actualRate, err := s.provider.GetActualRates(ctx, []string{title})
-		if err != nil || len(actualRate) == 0 {
-			return errors.Wrapf(err, "coin %s does not exist or was not found in the provider", title)
+		allUniqueTitles = append(allUniqueTitles, title)
+	}
+
+	allNewCoins, err := s.provider.GetActualRates(ctx, allUniqueTitles)
+	if err != nil {
+		if strings.Contains(err.Error(), "API returned an error") {
+			return errors.Wrap(entities.ErrInvalidParam, err.Error())
 		}
-		allNewCoins = append(allNewCoins, actualRate...)
+		return errors.Wrap(err, "failed to retrieve actual rates from provider")
+	}
+
+	foundSymbols := make(map[string]struct{})
+	for _, coin := range allNewCoins {
+		foundSymbols[coin.Title] = struct{}{}
+	}
+
+	for _, title := range requestedTitles {
+		if _, exists := foundSymbols[title]; !exists {
+			return errors.Wrapf(entities.ErrInvalidParam, "coin %q does not exist or was not found in the provider", title)
+		}
 	}
 
 	if err := s.storage.Store(ctx, allNewCoins); err != nil {
