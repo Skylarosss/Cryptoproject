@@ -67,6 +67,23 @@ func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []strin
 
 	return result, nil
 }
+func (svc *Service) UpdateRates(ctx context.Context) error {
+	titles, err := svc.storage.GetCoinsList(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get coins list from storage")
+	}
+
+	currentRates, err := svc.provider.GetActualRates(ctx, titles)
+	if err != nil {
+		return errors.Wrap(err, "failed to retrieve current rates from provider")
+	}
+
+	if err := svc.storage.Store(ctx, currentRates); err != nil {
+		return errors.Wrap(err, "failed to store updated rates in storage")
+	}
+
+	return nil
+}
 
 func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
 	if len(requestedTitles) == 0 {
