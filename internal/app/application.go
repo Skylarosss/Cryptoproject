@@ -24,22 +24,18 @@ func NewApp() *App {
 }
 
 func (a *App) Run() {
-	filePath := "/Users/iGamez/Desktop/Cryptoproject-1/config/cfg.yaml"
+	filePath := os.Getenv("CONFIG_FILE_PATH")
+	if filePath == "" {
+		filePath = "/app/config/cfg.yaml"
+	}
 
-	cfg, err := config.LoadCfg(filePath)
+	cfg, err := config.LoadCfg()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
-
-	user := cfg.Cfg.PgUser
-	pswd := cfg.Cfg.PgPswd
-	host := cfg.Cfg.PgHost
-	port := cfg.Cfg.PgPort
-	servport := cfg.Cfg.SrvPort
-	db := cfg.Cfg.PgDB
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, pswd, host, port, db)
-
+	connStr := "postgres://user:pass@db:5432/coinsdatabase?sslmode=disable"
+	servPort := cfg.SrvPort
 	client, err := client.NewClient(client.WithCustomCostIn("USD"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create client: %v\n", err)
@@ -73,13 +69,13 @@ func (a *App) Run() {
 		}
 		c.Start()
 	}()
-	server, err := myhttp.NewServer(servport, service)
+	server, err := myhttp.NewServer(servPort, service)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create server: %v\n", err)
 		os.Exit(1)
 	}
 	srv := &http.Server{
-		Addr:    servport,
+		Addr:    servPort,
 		Handler: server.Router,
 	}
 
@@ -98,7 +94,7 @@ func (a *App) Run() {
 		}
 	}()
 
-	fmt.Printf("Server running on port %s\n", cfg.Cfg.SrvPort)
+	fmt.Printf("Server running on port %s\n", servPort)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "Failed to start server: %v\n", err)
 		os.Exit(1)
