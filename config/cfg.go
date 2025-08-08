@@ -26,7 +26,6 @@ func LoadCfg() (*Config, error) {
 	}
 
 	viper.SetConfigFile(filePath)
-	//viper.SetConfigFile("/Users/iGamez/Desktop/Cryptoproject-1/config/cfg.yaml")
 	err := viper.ReadInConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read configuration file: %w", err)
