@@ -29,7 +29,7 @@ func NewService(storage Storage, provider CryptoProvider) (*Service, error) {
 }
 
 func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([]*entities.Coin, error) {
-	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
+	if err := s.ValidateAndFetchTitles(ctx, requestedTitles); err != nil {
 		return nil, errors.Wrap(err, "failed to preprocess requested titles")
 	}
 
@@ -46,7 +46,7 @@ func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([
 	return result, nil
 }
 func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []string, aggType string) ([]*entities.Coin, error) {
-	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
+	if err := s.ValidateAndFetchTitles(ctx, requestedTitles); err != nil {
 		return nil, errors.Wrap(err, "failed to preprocess aggregate requested titles")
 	}
 
@@ -66,25 +66,25 @@ func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []strin
 
 	return result, nil
 }
-func (svc *Service) UpdateRates(ctx context.Context) error {
-	titles, err := svc.storage.GetCoinsList(ctx)
+func (s *Service) UpdateRates(ctx context.Context) error {
+	titles, err := s.storage.GetCoinsList(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get coins list from storage")
 	}
 
-	currentRates, err := svc.provider.GetActualRates(ctx, titles)
+	currentRates, err := s.provider.GetActualRates(ctx, titles)
 	if err != nil {
 		return errors.Wrap(err, "failed to retrieve current rates from provider")
 	}
 
-	if err := svc.storage.Store(ctx, currentRates); err != nil {
+	if err := s.storage.Store(ctx, currentRates); err != nil {
 		return errors.Wrap(err, "failed to store updated rates in storage")
 	}
 
 	return nil
 }
 
-func (s *Service) validateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
+func (s *Service) ValidateAndFetchTitles(ctx context.Context, requestedTitles []string) error {
 	if len(requestedTitles) == 0 {
 		return errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty")
 	}
