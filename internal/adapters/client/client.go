@@ -82,8 +82,8 @@ func (c *Client) GetActualRates(ctx context.Context, titles []string) ([]entitie
 		return nil, errors.Wrap(err, "HTTP request failed")
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			errors.Wrapf(entities.ErrInternal, "failed to close response body: %v", err)
+		if cerr := resp.Body.Close(); cerr != nil {
+			err = errors.Wrapf(err, "failed to close response body: %v", cerr)
 		}
 	}()
 	bodyBytes, err := io.ReadAll(resp.Body)

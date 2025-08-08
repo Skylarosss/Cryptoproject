@@ -45,7 +45,6 @@ func (s *Service) GetLastRates(ctx context.Context, requestedTitles []string) ([
 
 	return result, nil
 }
-
 func (s *Service) GetAggregateRates(ctx context.Context, requestedTitles []string, aggType string) ([]*entities.Coin, error) {
 	if err := s.validateAndFetchTitles(ctx, requestedTitles); err != nil {
 		return nil, errors.Wrap(err, "failed to preprocess aggregate requested titles")

@@ -34,19 +34,13 @@ func TestService_GetLastRates_Success(t *testing.T) {
 	service, mockStorage, mockProvider := setupService(t)
 
 	requestedTitles := []string{"BTC", "ETH"}
-	existingTitles := []string{"BTC"}
-
-	mockStorage.EXPECT().
-		GetCoinsList(gomock.Any()).
-		Return(existingTitles, nil)
 
 	mockProvider.EXPECT().
-		GetActualRates(gomock.Any(), []string{"ETH"}).
-		Return([]entities.Coin{{Title: "ETH", Cost: 3000}}, nil)
-
-	mockStorage.EXPECT().
-		Store(gomock.Any(), []entities.Coin{{Title: "ETH", Cost: 3000}}).
-		Return(nil)
+		GetActualRates(gomock.Any(), requestedTitles).
+		Return([]entities.Coin{
+			{Title: "BTC", Cost: 50000},
+			{Title: "ETH", Cost: 3000},
+		}, nil)
 
 	mockStorage.EXPECT().
 		GetActualCoins(gomock.Any(), requestedTitles).
@@ -55,6 +49,12 @@ func TestService_GetLastRates_Success(t *testing.T) {
 			{Title: "ETH", Cost: 3000},
 		}, nil)
 
+	mockStorage.EXPECT().
+		Store(gomock.Any(), []entities.Coin{
+			{Title: "BTC", Cost: 50000},
+			{Title: "ETH", Cost: 3000},
+		}).Return(nil)
+
 	rates, err := service.GetLastRates(context.Background(), requestedTitles)
 
 	require.NoError(t, err)
@@ -62,17 +62,20 @@ func TestService_GetLastRates_Success(t *testing.T) {
 	require.Equal(t, float64(50000), rates[0].Cost)
 	require.Equal(t, float64(3000), rates[1].Cost)
 }
-
 func TestService_GetLastRates_GetCoinListError(t *testing.T) {
 	t.Parallel()
 
-	service, mockStorage, _ := setupService(t)
+	service, mockStorage, mockProvider := setupService(t)
 
 	requestedTitles := []string{"BTC"}
 
 	mockStorage.EXPECT().
 		GetCoinsList(gomock.Any()).
 		Return(nil, entities.ErrInternal)
+
+	mockProvider.EXPECT().
+		GetActualRates(gomock.Any(), gomock.Any()).
+		Return(nil, nil)
 
 	rates, err := service.GetLastRates(context.Background(), requestedTitles)
 

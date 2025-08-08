@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/viper"
 )
@@ -13,12 +14,18 @@ type Config struct {
 	PgDB    string `mapstructure:"pg-db"`
 	PgHost  string `mapstructure:"pg-host"`
 	PgPort  string `mapstructure:"pg-port"`
+	ConnStr string `mapstructure:"conn-str"`
 }
 
 func LoadCfg() (*Config, error) {
 	cfg := &Config{}
 
-	viper.SetConfigFile("/app/config/cfg.yaml")
+	filePath := os.Getenv("CONFIG_FILE_PATH")
+	if filePath == "" {
+		filePath = "/app/config/cfg.yaml"
+	}
+
+	viper.SetConfigFile(filePath)
 	//viper.SetConfigFile("/Users/iGamez/Desktop/Cryptoproject-1/config/cfg.yaml")
 	err := viper.ReadInConfig()
 	if err != nil {

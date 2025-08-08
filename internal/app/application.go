@@ -24,18 +24,15 @@ func NewApp() *App {
 }
 
 func (a *App) Run() {
-	filePath := os.Getenv("CONFIG_FILE_PATH")
-	if filePath == "" {
-		filePath = "/app/config/cfg.yaml"
-	}
-
 	cfg, err := config.LoadCfg()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
-	connStr := "postgres://user:pass@db:5432/coinsdatabase?sslmode=disable"
+
+	connStr := cfg.ConnStr
 	servPort := cfg.SrvPort
+
 	client, err := client.NewClient(client.WithCustomCostIn("USD"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create client: %v\n", err)
@@ -58,7 +55,6 @@ func (a *App) Run() {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-
 	go func() {
 		defer wg.Done()
 		c := cron.New()
@@ -69,11 +65,13 @@ func (a *App) Run() {
 		}
 		c.Start()
 	}()
+
 	server, err := myhttp.NewServer(servPort, service)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create server: %v\n", err)
 		os.Exit(1)
 	}
+
 	srv := &http.Server{
 		Addr:    servPort,
 		Handler: server.Router,
