@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -28,17 +29,22 @@ func NewStorage(connStr string) (*Storage, error) {
 	st.cancel = cancel
 	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
+		slog.Error("Failed to connect to database", "conn_str", connStr, "err", err)
 		return nil, errors.Wrapf(entities.ErrInternal, "New pool failure: %v", err)
 	}
 	st.dbPool = pool
+	slog.Info("Database connection established", "conn_str", connStr)
 	return st, nil
 }
+
 func (s *Storage) Close() {
 	s.once.Do(
 		func() {
 			s.cancel()
 			s.dbPool.Close()
-		})
+			slog.Info("Database connection closed")
+		},
+	)
 }
 
 func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
@@ -49,15 +55,18 @@ func (s *Storage) Store(ctx context.Context, coins []entities.Coin) error {
 
 	_, err := s.dbPool.CopyFrom(ctx, pgx.Identifier{"coins"}, []string{"title", "cost"}, pgx.CopyFromRows(data))
 	if err != nil {
+		slog.Error("Failed to perform bulk insert using COPY", "err", err)
 		return errors.Wrapf(entities.ErrInternal, "failed to perform bulk insert using COPY: %v", err)
 	}
 
+	slog.Info("Bulk insert completed successfully", "number_of_coins", len(coins))
 	return nil
 }
 
 func (s *Storage) GetCoinsList(ctx context.Context) ([]string, error) {
 	rows, err := s.dbPool.Query(ctx, "SELECT DISTINCT title FROM coins ORDER BY title ASC")
 	if err != nil {
+		slog.Error("Failed to fetch distinct titles of coins", "err", err)
 		return nil, errors.Wrap(err, "failed to fetch distinct titles of coins")
 	}
 	defer rows.Close()
@@ -66,15 +75,18 @@ func (s *Storage) GetCoinsList(ctx context.Context) ([]string, error) {
 	for rows.Next() {
 		var title string
 		if err := rows.Scan(&title); err != nil {
+			slog.Error("Failed to scan row into title", "err", err)
 			return nil, errors.Wrap(err, "failed to scan row into title")
 		}
 		titles = append(titles, title)
 	}
 
 	if err := rows.Err(); err != nil {
+		slog.Error("Error occurred while iterating over results", "err", err)
 		return nil, errors.Wrap(err, "error occurred while iterating over results")
 	}
 
+	slog.Info("Distinct coin titles fetched successfully", "number_of_titles", len(titles))
 	return titles, nil
 }
 
@@ -93,6 +105,7 @@ func (s *Storage) GetActualCoins(ctx context.Context, titles []string) ([]entiti
 
 	rows, err := s.dbPool.Query(ctx, query, titles)
 	if err != nil {
+		slog.Error("Failed to execute select query for actual coins", "err", err)
 		return nil, errors.Wrap(err, "failed to execute select query for actual coins")
 	}
 	defer rows.Close()
@@ -101,15 +114,18 @@ func (s *Storage) GetActualCoins(ctx context.Context, titles []string) ([]entiti
 	for rows.Next() {
 		var coin entities.Coin
 		if err := rows.Scan(&coin.Title, &coin.Cost); err != nil {
+			slog.Error("Failed to scan row into coin object", "err", err)
 			return nil, errors.Wrap(err, "failed to scan row into coin object")
 		}
 		result = append(result, coin)
 	}
 
 	if err := rows.Err(); err != nil {
+		slog.Error("Error occurred while iterating over results", "err", err)
 		return nil, errors.Wrap(err, "error occurred while iterating over results")
 	}
 
+	slog.Info("Actual coin rates fetched successfully", "number_of_coins", len(result))
 	return result, nil
 }
 
@@ -137,6 +153,7 @@ func (s *Storage) GetAggregateCoins(ctx context.Context, titles []string, aggTyp
 
 	rows, err := s.dbPool.Query(ctx, query, titles)
 	if err != nil {
+		slog.Error("Failed to execute aggregated query", "err", err)
 		return nil, errors.Wrap(err, "failed to execute aggregated query")
 	}
 	defer rows.Close()
@@ -146,6 +163,7 @@ func (s *Storage) GetAggregateCoins(ctx context.Context, titles []string, aggTyp
 		var coin entities.Coin
 		var cost sql.NullFloat64
 		if err := rows.Scan(&coin.Title, &cost); err != nil {
+			slog.Error("Failed to scan row into coin object", "err", err)
 			return nil, errors.Wrap(err, "failed to scan row into coin object")
 		}
 		if cost.Valid {
@@ -155,8 +173,10 @@ func (s *Storage) GetAggregateCoins(ctx context.Context, titles []string, aggTyp
 	}
 
 	if err := rows.Err(); err != nil {
+		slog.Error("Error occurred while iterating over results", "err", err)
 		return nil, errors.Wrap(err, "error occurred while iterating over results")
 	}
 
+	slog.Info("Aggregated coin rates fetched successfully", "number_of_coins", len(result))
 	return result, nil
 }

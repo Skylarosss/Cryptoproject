@@ -12,6 +12,7 @@ RUN go build -o cryptoproject ./cmd/app/main.go
 
 FROM alpine:latest
 
+RUN mkdir -p /app/logs
 RUN mkdir -p /app/config
 
 COPY --from=builder /build/cryptoproject /app/

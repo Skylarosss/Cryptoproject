@@ -3,7 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"Cryptoproject/internal/entities"
@@ -38,6 +38,7 @@ func NewServer(addr string, srv Service) (*Server, error) {
 		Router:  router,
 	}
 
+	// Документация OpenAPI
 	// @Title Cryptocurrency Rates API
 	// @Version 1.0
 	// @Description This API provides cryptocurrency rate information.
@@ -46,18 +47,24 @@ func NewServer(addr string, srv Service) (*Server, error) {
 	// @schemes http
 	// @produces json
 	// @consumes json
-
+	router.Get("/ping", srvInstance.pingHandler)
 	srvInstance.Router.Post("/rates/last", srvInstance.getLastRates)
 	srvInstance.Router.Post("/rates/aggregate", srvInstance.getAggregateRates)
 
 	return srvInstance, nil
 }
-
+func (srv *Server) pingHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status": "OK"}`))
+}
 func (srv *Server) Start() error {
+	slog.Info("HTTP server started", "addr", srv.HttpServer.Addr)
 	return srv.HttpServer.ListenAndServe()
 }
 
 func (srv *Server) Shutdown(ctx context.Context) error {
+	slog.Info("HTTP server shutting down")
 	return srv.HttpServer.Shutdown(ctx)
 }
 
@@ -67,7 +74,7 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 // @Accept json
 // @Produce json
 // @Param request body dto.RequestDTO true "Request containing coin titles" example(BTC,ETH)
-// @Success 200 {object} dto.CoinDTO
+// @Success 200 {object} dto.ResponseDTO
 // @Failure 400 {object} dto.ErrorResponseDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /rates/last [post]
@@ -75,18 +82,23 @@ func (srv *Server) getLastRates(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req dto.RequestDTO
-	if err := decodeRequest(r, &req); err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, err.Error())
-	}
-	req.Titles = removeEmptyStrings(req.Titles)
-
-	if len(req.Titles) == 0 {
-		sendErrorResponse(w, http.StatusBadRequest, "titles list cannot be empty")
+	if err := srv.decodeRequest(r, &req); err != nil {
+		slog.Error("Failed to decode request", "err", err)
+		srv.errProcessing(w, err)
 		return
 	}
+	req.Titles = srv.removeEmptyStrings(req.Titles)
+
+	if len(req.Titles) == 0 {
+		slog.Error("Empty titles list provided")
+		srv.errProcessing(w, errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty"))
+		return
+	}
+
 	coins, err := srv.Service.GetLastRates(r.Context(), req.Titles)
 	if err != nil {
-		sendErrorResponse(w, http.StatusInternalServerError, err.Error())
+		slog.Error("Failed to get last rates", "err", err)
+		srv.errProcessing(w, err)
 		return
 	}
 
@@ -97,29 +109,13 @@ func (srv *Server) getLastRates(w http.ResponseWriter, r *http.Request) {
 			Cost:  coin.Cost,
 		}
 	}
+
 	responseDTO := dto.ResponseDTO{
 		Coins: dtos,
 	}
 
-	jsonResponse(w, responseDTO)
-}
-func removeEmptyStrings(slices []string) []string {
-	var result []string
-	for _, str := range slices {
-		if str != "" {
-			result = append(result, str)
-		}
-	}
-	return result
-}
-func IsWrappedError(err error, target error) bool {
-	for err != nil {
-		if errors.Is(err, target) {
-			return true
-		}
-		err = errors.Unwrap(err)
-	}
-	return false
+	srv.jsonResponse(w, responseDTO)
+	slog.Info("Successfully retrieved last rates", "number_of_coins", len(dtos))
 }
 
 // @Summary Get aggregate rates
@@ -128,7 +124,7 @@ func IsWrappedError(err error, target error) bool {
 // @Accept json
 // @Produce json
 // @Param request body dto.RequestDTO true "Request containing coin titles and aggregation type"
-// @Success 200 {object} dto.CoinDTO
+// @Success 200 {object} dto.ResponseDTO
 // @Failure 400 {object} dto.ErrorResponseDTO
 // @Failure 500 {object} dto.ErrorResponseDTO
 // @Router /rates/aggregate [post]
@@ -136,28 +132,36 @@ func (srv *Server) getAggregateRates(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req dto.RequestDTO
-	if err := decodeRequest(r, &req); err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, err.Error())
+	if err := srv.decodeRequest(r, &req); err != nil {
+		slog.Error("Failed to decode request", "err", err)
+		srv.errProcessing(w, err)
 		return
 	}
-	req.Titles = removeEmptyStrings(req.Titles)
+	req.Titles = srv.removeEmptyStrings(req.Titles)
 	if len(req.Titles) == 0 {
-		sendErrorResponse(w, http.StatusBadRequest, "titles list cannot be empty")
+		slog.Error("Empty titles list provided")
+		srv.errProcessing(w, errors.Wrap(entities.ErrInvalidParam, "titles list cannot be empty"))
 		return
 	}
 
 	validTypes := map[string]bool{"MIN": true, "MAX": true, "AVG": true}
 	if !validTypes[req.AggType] {
-		sendErrorResponse(w, http.StatusBadRequest, "invalid aggregation type '"+req.AggType+"'")
+		slog.Error("Unsupported aggregation type", "agg_type", req.AggType)
+		srv.errProcessing(w, errors.Wrap(entities.ErrInvalidParam, "invalid aggregation type"))
 		return
 	}
 
 	coins, err := srv.Service.GetAggregateRates(r.Context(), req.Titles, req.AggType)
 	if err != nil {
 		if errors.Is(err, entities.ErrInvalidParam) {
-			sendErrorResponse(w, http.StatusBadRequest, err.Error())
+			slog.Error("Invalid parameter provided", "err", err)
+			srv.errProcessing(w, err)
+		} else if errors.Is(err, entities.ErrInternal) {
+			slog.Error("Internal service error", "err", err)
+			srv.errProcessing(w, err)
 		} else {
-			sendErrorResponse(w, http.StatusInternalServerError, err.Error())
+			slog.Error("Failed to get aggregate rates", "err", err)
+			srv.errProcessing(w, err)
 		}
 		return
 	}
@@ -174,10 +178,11 @@ func (srv *Server) getAggregateRates(w http.ResponseWriter, r *http.Request) {
 		Coins: dtos,
 	}
 
-	jsonResponse(w, responseDTO)
+	srv.jsonResponse(w, responseDTO)
+	slog.Info("Successfully retrieved aggregate rates", "number_of_coins", len(dtos))
 }
 
-func decodeRequest(r *http.Request, decReq any) error {
+func (srv *Server) decodeRequest(r *http.Request, decReq any) error {
 	if r.Body == nil || r.ContentLength == 0 {
 		return errors.New("empty request body")
 	}
@@ -192,22 +197,51 @@ func decodeRequest(r *http.Request, decReq any) error {
 	return nil
 }
 
-func sendErrorResponse(w http.ResponseWriter, status int, message string) {
-	errorResp := dto.ErrorResponseDTO{
-		Code:    status,
-		Message: message,
-	}
-
+func (srv *Server) jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-
-	if err := json.NewEncoder(w).Encode(errorResp); err != nil {
-		log.Printf("Error sending response: %v", err)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		slog.Error("Unable to encode response", "err", err)
+		http.Error(w, "unable to encode response", http.StatusInternalServerError)
 	}
 }
 
-func jsonResponse(w http.ResponseWriter, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, "unable to encode response", http.StatusInternalServerError)
+func (srv *Server) removeEmptyStrings(slices []string) []string {
+	var result []string
+	for _, str := range slices {
+		if str != "" {
+			result = append(result, str)
+		}
 	}
+	return result
+}
+func (srv *Server) errProcessing(resp http.ResponseWriter, err error) {
+	statusCode := http.StatusInternalServerError
+	errDTO := dto.ErrorResponseDTO{
+		Code:    statusCode,
+		Message: err.Error(),
+	}
+
+	switch {
+	case errors.Is(err, entities.ErrInvalidParam):
+		errDTO.Code = http.StatusBadRequest
+	case errors.Is(err, entities.ErrInternal):
+		errDTO.Code = http.StatusForbidden
+	case errors.Is(err, entities.ErrNotFound):
+		errDTO.Code = http.StatusNotFound
+	default:
+		errors.Is(err, entities.ErrNotFound)
+		errDTO.Code = http.StatusNotFound
+		errDTO.Message = "coin does not exist or was not found in the provider"
+	}
+
+	errDtoData, err := json.Marshal(&errDTO)
+	if err != nil {
+		err := errors.Wrapf(entities.ErrInternal, "marshal failure: %v", err)
+		slog.Error(err.Error())
+		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp.WriteHeader(errDTO.Code)
+	resp.Write(errDtoData) //nolint:errcheck,gosec //ok
 }
